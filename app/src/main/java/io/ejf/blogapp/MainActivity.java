@@ -18,22 +18,40 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import com.google.android.gms.appindexing.Action;
+import com.google.android.gms.appindexing.AppIndex;
+import com.google.android.gms.common.api.GoogleApiClient;
+
 public class MainActivity extends AppCompatActivity {
 //        implements NavigationView.OnNavigationItemSelectedListener {
 
     private WebView wv;
+    private GoogleApiClient mClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        mClient = new GoogleApiClient.Builder(this).addApi(AppIndex.API).build();
+
         wv = (WebView) findViewById(R.id.webview);
         wv.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
-                if (!url.startsWith("javascript:"))
-                    wv.loadUrl("javascript:function killBar(){document.getElementsByClassName('sidebar')[0].style.display='none'}; killBar();");
+                if (url.startsWith("javascript:"))
+                    return;
+
+                wv.loadUrl("javascript:function killBar(){document.getElementsByClassName('sidebar')[0].style.display='none'}; killBar();");
+                // Define a title for your current page, shown in autocompletion UI
+                String title = view.getTitle();
+                Uri webUri = Uri.parse(url);
+                Uri appUri = Uri.parse("android-app://io.ejf.blogapp/https/" + webUri.getHost() + webUri.getPath());
+                // Construct the Action performed by the user
+                Action viewAction = Action.newAction(Action.TYPE_VIEW, title, webUri, appUri);
+                // Call the App Indexing API start method after the view has completely rendered
+                AppIndex.AppIndexApi.start(mClient, viewAction);
+
             }
         });
         WebSettings webSettings = wv.getSettings();
@@ -44,6 +62,8 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onStart() {
         super.onStart();
+        mClient.connect();
+
         Intent intent = getIntent();
         String action = intent.getAction();
         Uri data = intent.getData();
@@ -51,6 +71,22 @@ public class MainActivity extends AppCompatActivity {
         if (Intent.ACTION_VIEW.equals(action) && null != data) {
             wv.loadUrl(data.toString());
         }
+    }
+
+    @Override
+    public void onStop() {
+        // Call end() and disconnect the client
+        // Define a title for your current page, shown in autocompletion UI
+        String title = wv.getTitle();
+        if (null != wv.getUrl() && null != wv.getUrl()) {
+            Uri webUri = Uri.parse(wv.getUrl());
+            Uri appUri = Uri.parse("android-app://io.ejf.blogapp/https/" + webUri.getHost() + webUri.getPath());
+
+            Action viewAction = Action.newAction(Action.TYPE_VIEW, title, webUri, appUri);
+            AppIndex.AppIndexApi.end(mClient, viewAction);
+            mClient.disconnect();
+        }
+        super.onStop();
     }
 
 //    @Override
